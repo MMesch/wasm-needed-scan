@@ -54,20 +54,29 @@ For inspecting an on-disk tree of already-extracted packages.
 ### `scan-remote.sh` — download-scan-delete stream
 
 ```
-scan-remote.sh PACKAGE [PACKAGE...]
+scan-remote.sh [--all] [PACKAGE...]
 ```
 
-Fetches specific packages from a channel, extracts to a temp dir,
-records NEEDED strings, and deletes the archive + extracted tree
-before moving to the next package. No lasting disk usage beyond a
-small CSV log (which is also deleted after the divergence report
-prints, unless `KEEP_CSV=1`).
+Fetches packages from a channel one at a time, extracts to a temp
+dir, records NEEDED strings, and deletes the archive + extracted
+tree before moving to the next. Disk usage stays flat — the only
+lasting file is a small CSV log (also deleted after the report,
+unless `KEEP_CSV=1`).
 
-- Default channel: `https://prefix.dev/emscripten-forge-4x` — override
+- `--all` — scan every distinct package name in the channel (latest
+  build each). Handy for a full ecosystem audit; runs in minutes and
+  catches every NEEDED divergence, not just the one you thought
+  to look for.
+- `PACKAGE...` — scan only these named packages.
+- Default channel: `https://prefix.dev/emscripten-forge-4x`. Override
   with `CHANNEL=... SUBDIR=... scan-remote.sh ...`.
 - Emits the divergence report at the end automatically. Set
   `KEEP_CSV=1` to keep the intermediate CSV.
-- Fetches only the packages you name — not the whole channel.
+
+Note on `--all`: since the scan crosses packages that would never
+coexist in one env (e.g., different Python versions, mutex-managed
+BLAS backends), a couple of noise entries can appear alongside the
+real bugs. Easy to eyeball past.
 
 ## Requirements
 

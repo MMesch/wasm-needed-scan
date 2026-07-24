@@ -18,8 +18,16 @@
 
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-    echo "usage: $0 PACKAGE [PACKAGE...]" >&2
+ALL=0
+if [ "${1:-}" = "--all" ]; then
+    ALL=1
+    shift
+fi
+
+if [ $ALL -eq 0 ] && [ $# -lt 1 ]; then
+    echo "usage: $0 [--all] [PACKAGE...]" >&2
+    echo "  --all           scan every distinct package name in the channel (latest build each)" >&2
+    echo "  PACKAGE...      scan only these named packages" >&2
     exit 2
 fi
 
@@ -36,6 +44,15 @@ trap 'rm -f "$repodata"' EXIT
 
 echo "==> Fetching $CHANNEL/$SUBDIR/repodata.json" >&2
 curl -sL "$CHANNEL/$SUBDIR/repodata.json" > "$repodata"
+
+if [ $ALL -eq 1 ]; then
+    set -- $(jq -r '
+        ((.["packages.conda"] // {}) | to_entries | map(.value.name)) +
+        ((.packages         // {}) | to_entries | map(.value.name))
+        | unique | .[]
+    ' "$repodata")
+    echo "==> --all: scanning ${#} distinct package names" >&2
+fi
 
 echo "package,so_file,needed_string" > "$CSV_OUT"
 
