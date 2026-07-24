@@ -34,16 +34,40 @@ it's safe to point at a mixed tree.
 
 ## Usage
 
+Two scripts, pick the one that matches your source:
+
+### `scan-needed.sh` — scan a local tree
+
 ```
 scan-needed.sh [--csv] [PATH]
 ```
 
+For inspecting an on-disk tree of already-extracted packages.
+
 - `PATH` defaults to `~/.cache/rattler/cache/pkgs` (rattler's local
   package cache — populated by pixi as you install/build things).
-- Point at a pixi env prefix, a rattler-build output tree, or an
-  unpacked channel dump to scan those instead.
+- Point at a pixi env prefix, a rattler-build output tree, or a
+  scratch dir where you unpacked some `.conda`s to scan those instead.
 - `--csv` emits raw `package,so_file,needed_string` rows for further
   processing.
+
+### `scan-remote.sh` — download-scan-delete stream
+
+```
+scan-remote.sh PACKAGE [PACKAGE...]
+```
+
+Fetches specific packages from a channel, extracts to a temp dir,
+records NEEDED strings, and deletes the archive + extracted tree
+before moving to the next package. No lasting disk usage beyond a
+small CSV log (which is also deleted after the divergence report
+prints, unless `KEEP_CSV=1`).
+
+- Default channel: `https://prefix.dev/emscripten-forge-4x` — override
+  with `CHANNEL=... SUBDIR=... scan-remote.sh ...`.
+- Emits the divergence report at the end automatically. Set
+  `KEEP_CSV=1` to keep the intermediate CSV.
+- Fetches only the packages you name — not the whole channel.
 
 ## Requirements
 
