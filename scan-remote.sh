@@ -121,8 +121,10 @@ for want in "$@"; do
                     f && /^ *- / { gsub(/^ *- /, ""); print p "," s "," $0 }
                     f && !/^ *- /{f=0}
                   '
-        done >> "$CSV_OUT"
-    )
+        done >> "$CSV_OUT" || true
+
+        exit 0
+    ) || true
 
     rm -rf "$workdir"
 done
