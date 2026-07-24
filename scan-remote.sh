@@ -77,35 +77,52 @@ for want in "$@"; do
     echo "==> $want -> $fname ($kind)" >&2
 
     workdir=$(mktemp -d)
-    dest="$workdir/$fname"
-    curl -sSL -o "$dest" "$CHANNEL/$SUBDIR/$fname"
 
-    extract_root="$workdir/extracted"
-    mkdir -p "$extract_root"
-    case "$kind" in
-        conda)
-            unzip -q "$dest" -d "$workdir/unzipped"
-            for t in "$workdir/unzipped"/pkg-*.tar.zst; do
-                [ -f "$t" ] || continue
-                zstd -d < "$t" | tar -x -C "$extract_root"
-            done
-            ;;
-        tarbz2)
-            tar -xjf "$dest" -C "$extract_root"
-            ;;
-    esac
+    # Everything below is best-effort: if download or extract fails for
+    # one package, log a warning and skip to the next. Otherwise a single
+    # bad archive would kill a channel-wide sweep.
+    (
+        set +e
+        dest="$workdir/$fname"
+        if ! curl -sSL --fail -o "$dest" "$CHANNEL/$SUBDIR/$fname"; then
+            echo "     skip: curl failed for $fname" >&2
+            exit 0
+        fi
 
-    # Emit CSV rows for every wasm .so in this package.
-    find "$extract_root" -name '*.so*' -type f 2>/dev/null | while read -r so; do
-        # Report the .so path relative to the package root so output is stable.
-        rel="${so#$extract_root/}"
-        wasm-objdump -x "$so" 2>/dev/null \
-            | awk -v p="$want" -v s="$rel" '
-                /needed_dynlibs/{f=1; next}
-                f && /^ *- / { gsub(/^ *- /, ""); print p "," s "," $0 }
-                f && !/^ *- /{f=0}
-              '
-    done >> "$CSV_OUT"
+        extract_root="$workdir/extracted"
+        mkdir -p "$extract_root"
+        case "$kind" in
+            conda)
+                if ! unzip -q "$dest" -d "$workdir/unzipped" 2>/dev/null; then
+                    echo "     skip: unzip failed for $fname" >&2
+                    exit 0
+                fi
+                for t in "$workdir/unzipped"/pkg-*.tar.zst; do
+                    [ -f "$t" ] || continue
+                    if ! zstd -dq < "$t" | tar -x -C "$extract_root" 2>/dev/null; then
+                        echo "     skip: zstd/tar failed for $fname" >&2
+                        exit 0
+                    fi
+                done
+                ;;
+            tarbz2)
+                if ! tar -xjf "$dest" -C "$extract_root" 2>/dev/null; then
+                    echo "     skip: tar failed for $fname" >&2
+                    exit 0
+                fi
+                ;;
+        esac
+
+        find "$extract_root" -name '*.so*' -type f 2>/dev/null | while read -r so; do
+            rel="${so#$extract_root/}"
+            wasm-objdump -x "$so" 2>/dev/null \
+                | awk -v p="$want" -v s="$rel" '
+                    /needed_dynlibs/{f=1; next}
+                    f && /^ *- / { gsub(/^ *- /, ""); print p "," s "," $0 }
+                    f && !/^ *- /{f=0}
+                  '
+        done >> "$CSV_OUT"
+    )
 
     rm -rf "$workdir"
 done
